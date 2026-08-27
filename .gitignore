@@ -1,0 +1,14 @@
+# Bases de dados
+Dados/Raw/
+Dados/dirty/
+Dados/clear/
+
+# Python
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Arquivos temporários
+temporario.txt
