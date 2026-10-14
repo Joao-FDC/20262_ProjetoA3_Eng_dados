@@ -1,0 +1,234 @@
+from pathlib import Path
+import pyarrow.parquet as pq
+import mysql.connector
+
+
+
+
+PASTA_CLEAR = Path(
+    r"C:\Users\Pichau\OneDrive - Acadêmico - Ânima Educação\Documentos"
+    r"\engenharia_de_dados\projeto_A3\Dados\clear"
+)
+
+DB_HOST = "localhost"
+DB_PORT = 3306
+DB_USER = "root"
+DB_PASSWORD = ""
+DB_NAME = 'projeto_pnad'
+
+
+TABELA = "pnad_clear"
+
+BATCH_SIZE = 500
+
+
+
+
+arquivos = sorted(PASTA_CLEAR.glob("*.parquet"))
+
+if not arquivos:
+    raise FileNotFoundError(
+        f"Nenhum arquivo Parquet encontrado em:\n{PASTA_CLEAR}"
+    )
+
+print("=" * 70)
+print("ARQUIVOS ENCONTRADOS")
+print("=" * 70)
+
+for arquivo in arquivos:
+    print(arquivo.name)
+
+print()
+print(f"Quantidade de arquivos: {len(arquivos)}")
+print()
+
+
+print("Conectando ao MySQL...")
+
+conn = mysql.connector.connect(
+    host=DB_HOST,
+    port=DB_PORT,
+    user=DB_USER,
+    password=DB_PASSWORD,
+    database=DB_NAME
+)
+
+cursor = conn.cursor()
+
+print("Conexão realizada com sucesso!")
+print()
+
+
+
+cursor.execute(f"DESCRIBE {TABELA}")
+
+estrutura = cursor.fetchall()
+
+colunas_sql = [
+    linha[0]
+    for linha in estrutura
+    if linha[0] != "id_pnad"
+]
+
+print(f"Colunas encontradas na tabela: {len(colunas_sql)}")
+
+if len(colunas_sql) != 87:
+    raise ValueError(
+        f"Esperadas 87 colunas de dados, "
+        f"mas foram encontradas {len(colunas_sql)}."
+    )
+
+
+
+nomes_colunas = ", ".join(
+    f"`{coluna}`" for coluna in colunas_sql
+)
+
+placeholders = ", ".join(
+    ["%s"] * len(colunas_sql)
+)
+
+sql = f"""
+INSERT INTO {TABELA}
+({nomes_colunas})
+VALUES ({placeholders})
+"""
+
+
+total_geral = 0
+
+for arquivo in arquivos:
+
+    print("=" * 70)
+    print(f"PROCESSANDO: {arquivo.name}")
+    print("=" * 70)
+
+    parquet = pq.ParquetFile(arquivo)
+
+    total_arquivo = parquet.metadata.num_rows
+
+    print(f"Registros esperados: {total_arquivo:,}")
+
+    
+
+    # Extrai o ano do nome do arquivo
+    ano_arquivo = arquivo.stem.split("_")[1]
+
+    cursor.execute(
+        f"""
+        SELECT COUNT(*)
+        FROM {TABELA}
+        WHERE Ano = %s
+        """,
+        (ano_arquivo,)
+    )
+
+    registros_existentes = cursor.fetchone()[0]
+
+    print(f"Registros já existentes para {ano_arquivo}: {registros_existentes:,}")
+
+   
+    if registros_existentes == total_arquivo:
+
+        print(
+            f"Arquivo {arquivo.name} já foi importado completamente."
+        )
+        print("Pulando arquivo...")
+        print()
+
+        total_geral += registros_existentes
+
+        continue
+
+    
+    if registros_existentes > 0:
+
+        raise RuntimeError(
+            f"O ano {ano_arquivo} possui "
+            f"{registros_existentes:,} registros no banco, "
+            f"mas o arquivo possui {total_arquivo:,}. "
+            f"Importação parcial detectada. "
+            f"Não é seguro continuar automaticamente."
+        )
+
+    print()
+    print("Iniciando importação...")
+    print()
+
+    total_arquivo_inserido = 0
+
+   
+    for batch in parquet.iter_batches(
+        batch_size=BATCH_SIZE
+    ):
+
+        df = batch.to_pandas()
+
+      
+        for coluna in colunas_sql:
+
+            if coluna not in df.columns:
+
+                print(
+                    f"  Coluna ausente no arquivo: {coluna} "
+                    f"-> preenchendo com NULL"
+                )
+
+                df[coluna] = None
+
+       
+
+        df = df[colunas_sql]
+
+      
+
+        df = df.where(df.notna(), None)
+
+
+        dados = list(
+            df.itertuples(
+                index=False,
+                name=None
+            )
+        )
+
+      
+
+        try:
+
+            cursor.executemany(
+                sql,
+                dados
+            )
+
+            conn.commit()
+
+            quantidade = len(dados)
+
+            total_arquivo_inserido += quantidade
+            total_geral += quantidade
+
+            print(
+                f"  Inseridos: "
+                f"{total_arquivo_inserido:,}/{total_arquivo:,} "
+                f"| Total geral: {total_geral:,}"
+            )
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            print()
+            print("ERRO DURANTE A INSERÇÃO:")
+            print(erro)
+            print()
+
+            raise
+
+  
+    print()
+    print(
+        f"Arquivo concluído: "
+        f"{total_arquivo_inserido:,} registros"
+    )
+    print()

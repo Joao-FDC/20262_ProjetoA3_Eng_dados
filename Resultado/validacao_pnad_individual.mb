@@ -1,0 +1,71 @@
+# Relatório de Validação da Tabela PNAD Individual
+
+## 1. Objetivo
+
+Validar a integridade da cópia da tabela `pnad_clear` para a tabela `pnad_individual`, verificando a correspondência dos identificadores, a estrutura das tabelas e a igualdade dos valores das colunas de dados.
+
+## 2. Ambiente utilizado
+
+- **Banco de dados:** MySQL
+- **Schema:** `projeto_pnad`
+- **Tabela de origem:** `pnad_clear`
+- **Tabela de destino:** `pnad_individual`
+- **Linguagem de validação:** Python
+- **Biblioteca de conexão:** `mysql.connector`
+- **Script utilizado:** `validar_pnad_individual.py`
+
+## 3. Metodologia
+
+A validação foi realizada em etapas:
+
+1. Conexão ao banco de dados MySQL.
+2. Contagem dos registros nas duas tabelas.
+3. Verificação dos identificadores técnicos `id_pnad`, incluindo o menor e o maior valor.
+4. Verificação de IDs ausentes ou extras na tabela de destino.
+5. Comparação dos nomes e da ordem das colunas das duas tabelas.
+6. Comparação dos valores das colunas de dados, em lotes de 1.000 IDs, utilizando o identificador `id_pnad` para relacionar os registros.
+
+A comparação de valores utilizou o operador `<=>` do MySQL, que permite comparar valores incluindo campos nulos (`NULL`).
+
+O identificador técnico `id_pnad` foi verificado separadamente. A comparação de conteúdo abrangeu as outras 87 colunas.
+
+## 4. Resultados
+
+| Verificação | Resultado |
+|---|---:|
+| Registros em `pnad_clear` | 3.595.684 |
+| Registros em `pnad_individual` | 3.595.684 |
+| Menor `id_pnad` | 1 |
+| Maior `id_pnad` | 3.595.684 |
+| IDs ausentes na cópia | 0 |
+| IDs extras na cópia | 0 |
+| Colunas totais por tabela | 88 |
+| Colunas de dados comparadas | 87 |
+| Registros com diferenças de conteúdo | 0 |
+
+## 5. Conclusão
+
+Os testes realizados indicaram que as tabelas `pnad_clear` e `pnad_individual` possuem a mesma quantidade de registros, estruturas correspondentes e identificadores técnicos alinhados. Na comparação das 87 colunas de dados, foram examinados 3.595.684 registros e não foram encontradas diferenças de conteúdo.
+
+Dessa forma, a tabela `pnad_individual` foi validada como cópia consistente de `pnad_clear` para as verificações executadas.
+
+É importante destacar que `id_pnad` é um identificador técnico da linha no banco de dados e não representa um identificador oficial e permanente de uma pessoa entrevistada pelo IBGE. Além disso, a igualdade entre as tabelas não garante, por si só, a ausência de todos os problemas de qualidade nos dados originais.
+
+## 6. Evidências e reprodutibilidade
+
+A validação pode ser reproduzida por meio do script `validar_pnad_individual.py`, executado no ambiente Python com acesso ao banco de dados `projeto_pnad`.
+
+O terminal apresentou os seguintes resultados finais:
+
+- Registros comparados: 3.595.684
+- Registros com diferenças: 0
+- Resultado: conteúdo idêntico nas colunas comparadas.
+
+A evidência deve ser mantida junto ao script e aos demais artefatos de qualidade de dados do projeto.
+
+## 7. Próximas etapas
+
+- Documentar as regras de limpeza aplicadas à PNAD.
+- Consolidar os indicadores de qualidade dos dados RAW, DIRTY e CLEAR.
+- Registrar as limitações da fonte e as decisões de tratamento.
+- Integrar outras fontes necessárias para investigar a relação entre desenvolvimento econômico, natalidade e mortalidade.
